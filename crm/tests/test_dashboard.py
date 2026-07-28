@@ -17,6 +17,7 @@ from crm.api.dashboard import (
 	get_chart,
 	get_dashboard,
 	get_deal_status_change_counts,
+	get_deals_by_organization,
 	get_deals_by_salesperson,
 	get_deals_by_source,
 	get_deals_by_stage_axis,
@@ -384,6 +385,48 @@ class TestDashboard(IntegrationTestCase):
 
 		result_user = get_deals_by_salesperson(self.from_date, self.to_date, self.user2_email)
 		self.assertIn("data", result_user)
+
+	def test_get_deals_by_organization(self):
+		"""Test get_deals_by_organization returns per-customer won value"""
+		result = get_deals_by_organization(self.from_date, self.to_date)
+
+		self.assertEqual(result["title"], "Total customer value")
+		self.assertIsInstance(result["data"], list)
+
+		if result["data"]:
+			for entry in result["data"]:
+				self.assertIn("organization", entry)
+				self.assertIn("orders", entry)
+				self.assertIn("value", entry)
+
+		result_user = get_deals_by_organization(self.from_date, self.to_date, self.user2_email)
+		self.assertIn("data", result_user)
+
+	def test_deals_by_organization_includes_repeat_orders(self):
+		"""Klantwaarde = won (new) + repeat: a repeat order must add to the same customer's total"""
+		from crm.fcrm.doctype.crm_deal.crm_deal import create_repeat_order
+
+		deal = frappe.get_doc(
+			{
+				"doctype": "CRM Deal",
+				"organization": "Acme Corp",
+				"status": "Won",
+				"currency": "USD",
+				"exchange_rate": 1,
+				"deal_owner": "Administrator",
+				"deal_value": 10000,
+			}
+		).insert()
+
+		baseline = {r["organization"]: r for r in get_deals_by_organization(self.from_date, self.to_date)["data"]}
+		baseline_value = baseline.get("Acme Corp", {}).get("value", 0)
+		baseline_orders = baseline.get("Acme Corp", {}).get("orders", 0)
+
+		create_repeat_order(deal.name)
+
+		updated = {r["organization"]: r for r in get_deals_by_organization(self.from_date, self.to_date)["data"]}
+		self.assertEqual(updated["Acme Corp"]["orders"], baseline_orders + 1)
+		self.assertEqual(updated["Acme Corp"]["value"], baseline_value + 10000)
 
 	def test_get_base_currency_symbol(self):
 		"""Test get_base_currency_symbol returns correct currency symbol"""
