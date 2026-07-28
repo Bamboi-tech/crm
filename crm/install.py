@@ -126,11 +126,17 @@ def add_default_deal_statuses():
 			"probability": 100,
 			"position": 6,
 		},
+		"Repeat Order": {
+			"color": "teal",
+			"type": "Won",
+			"probability": 100,
+			"position": 7,
+		},
 		"Lost": {
 			"color": "red",
 			"type": "Lost",
 			"probability": 0,
-			"position": 7,
+			"position": 8,
 		},
 	}
 
