@@ -103,6 +103,32 @@ function convertToDeal(selections, unselectAll) {
   })
 }
 
+function addRepeatOrder(selections, unselectAll) {
+  capture('bulk_add_repeat_order')
+  let deals = Array.from(selections)
+  Promise.all(
+    deals.map((name) =>
+      call('crm.fcrm.doctype.crm_deal.crm_deal.create_repeat_order', {
+        deal: name,
+      }),
+    ),
+  )
+    .then((repeatOrders) => {
+      toast.success(__('Repeat Order Added Successfully'))
+      list.value.reload()
+      unselectAll()
+      if (repeatOrders.length === 1) {
+        router.push({ name: 'Deal', params: { dealId: repeatOrders[0] } })
+      }
+    })
+    .catch(() => {
+      // `call` surfaces its own error toast; keep list state consistent regardless
+      // (some repeat orders may have been created before the failure).
+      list.value.reload()
+      unselectAll()
+    })
+}
+
 function deleteValues(selections, unselectAll) {
   unselectAllAction.value = unselectAll
 
@@ -194,6 +220,13 @@ function bulkActions(selections, unselectAll) {
     actions.push({
       label: __('Convert to Deal'),
       onClick: () => convertToDeal(selections, unselectAll),
+    })
+  }
+
+  if (props.doctype === 'CRM Deal') {
+    actions.push({
+      label: __('Add Repeat Order'),
+      onClick: () => addRepeatOrder(selections, unselectAll),
     })
   }
 

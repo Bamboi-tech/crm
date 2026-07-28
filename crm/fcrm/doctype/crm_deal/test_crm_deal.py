@@ -7,6 +7,7 @@ from frappe.tests import IntegrationTestCase
 from crm.fcrm.doctype.crm_deal.crm_deal import (
 	add_contact,
 	create_deal,
+	create_repeat_order,
 	remove_contact,
 	set_primary_contact,
 )
@@ -27,6 +28,45 @@ class TestCRMDeal(IntegrationTestCase):
 		self.assertTrue(deal.name)
 		self.assertTrue(deal.organization)
 		self.assertEqual(deal.annual_revenue, 1000000)
+
+	def test_create_repeat_order(self):
+		"""Test cloning a Won deal into a Repeat Order deal for the same customer"""
+		source = create_test_deal(
+			organization="Repeat Order Test Org",
+			deal_value=50000,
+			status="Won",
+		)
+		# Simulate SLA/response metrics accrued on the original deal.
+		source.db_set(
+			{
+				"first_responded_on": frappe.utils.now_datetime(),
+				"first_response_time": 3600,
+				"sla_status": "Fulfilled",
+			}
+		)
+
+		repeat_order_name = create_repeat_order(source.name)
+		repeat_order = frappe.get_doc("CRM Deal", repeat_order_name)
+
+		self.assertNotEqual(repeat_order.name, source.name)
+		self.assertEqual(repeat_order.status, "Repeat Order")
+		self.assertEqual(repeat_order.organization, source.organization)
+		self.assertEqual(repeat_order.deal_value, source.deal_value)
+		self.assertEqual(frappe.db.get_value("CRM Deal Status", "Repeat Order", "type"), "Won")
+
+		# The repeat order gets its own fresh lifecycle, not the source's history/dates.
+		self.assertEqual(repeat_order.closed_date, frappe.utils.getdate())
+		self.assertEqual(repeat_order.expected_closure_date, frappe.utils.getdate())
+		# A freshly created doc only gets an open log row (to="") for its starting status;
+		# it must not carry over the source deal's full transition history.
+		self.assertEqual(len(repeat_order.status_change_log), 1)
+		self.assertEqual(repeat_order.status_change_log[0].get("from"), "Repeat Order")
+		self.assertEqual(repeat_order.status_change_log[0].to, "")
+
+		# SLA/response metrics from the source must NOT leak into the fresh repeat order.
+		self.assertIsNone(repeat_order.first_responded_on)
+		self.assertFalse(repeat_order.first_response_time)
+		self.assertEqual(len(repeat_order.rolling_responses), 0)
 
 	def test_set_primary_contact(self):
 		"""Test setting primary contact from contacts table"""

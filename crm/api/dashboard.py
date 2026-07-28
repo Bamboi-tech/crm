@@ -1147,6 +1147,70 @@ def get_deals_by_salesperson(
 	}
 
 
+def get_deals_by_organization(
+	from_date: str | None = None, to_date: str | None = None, user: str | None = None
+):
+	"""
+	Get total customer value (won + repeat order deals) grouped by organization for the dashboard.
+	Only deals whose status type is "Won" are counted, so repeat orders (status "Repeat Order",
+	type "Won") add to the same customer's total alongside their original won deals.
+	[
+		{ organization: 'Acme Corp', orders: 3, value: 80000 },
+		{ organization: 'Globex', orders: 1, value: 30000 },
+		...
+	]
+	"""
+	if not from_date or not to_date:
+		from_date = frappe.utils.get_first_day(from_date or frappe.utils.nowdate())
+		to_date = frappe.utils.get_last_day(to_date or frappe.utils.nowdate())
+
+	# Using Frappe Query Builder with JOIN to filter on won-type statuses (Won, Repeat Order, ...)
+	CRMDeal = DocType("CRM Deal")
+	CRMDealStatus = DocType("CRM Deal Status")
+
+	query = (
+		frappe.qb.from_(CRMDeal)
+		.join(CRMDealStatus)
+		.on(CRMDeal.status == CRMDealStatus.name)
+		.select(
+			IfNull(CRMDeal.organization, "Empty").as_("organization"),
+			Count("*").as_("orders"),
+			Sum(Coalesce(CRMDeal.deal_value, 0) * IfNull(CRMDeal.exchange_rate, 1)).as_("value"),
+		)
+		.where((Date(CRMDeal.creation).between(from_date, to_date)) & (CRMDealStatus.type == "Won"))
+		.groupby(CRMDeal.organization)
+		.orderby(
+			Sum(Coalesce(CRMDeal.deal_value, 0) * IfNull(CRMDeal.exchange_rate, 1)), order=frappe.qb.desc
+		)
+	)
+
+	if user:
+		query = query.where(CRMDeal.deal_owner == user)
+
+	result = query.run(as_dict=True)
+
+	return {
+		"data": result or [],
+		"title": _("Total customer value"),
+		"subtitle": _("Won and repeat order value per customer"),
+		"xAxis": {
+			"title": _("Organization"),
+			"key": "organization",
+			"type": "category",
+		},
+		"yAxis": {
+			"title": _("Number of orders"),
+		},
+		"y2Axis": {
+			"title": _("Customer value") + f" ({get_base_currency_symbol()})",
+		},
+		"series": [
+			{"name": "orders", "type": "bar"},
+			{"name": "value", "type": "line", "showDataPoints": True, "axis": "y2"},
+		],
+	}
+
+
 def get_base_currency_symbol():
 	"""
 	Get the base currency symbol from the system settings.

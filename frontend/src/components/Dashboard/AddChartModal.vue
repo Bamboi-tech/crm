@@ -98,6 +98,7 @@ const axisCharts = [
   { label: __('Lost Deal Reasons'), value: 'lost_deal_reasons' },
   { label: __('Deals by Territory'), value: 'deals_by_territory' },
   { label: __('Deals by Salesperson'), value: 'deals_by_salesperson' },
+  { label: __('Total Customer Value'), value: 'deals_by_organization' },
 ]
 
 const donutChart = ref('deals_by_stage_donut')

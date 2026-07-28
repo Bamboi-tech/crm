@@ -470,3 +470,46 @@ def create_deal(doc: dict):
 
 	deal.insert(ignore_permissions=True)
 	return deal.name
+
+
+@frappe.whitelist()
+def create_repeat_order(deal: str):
+	if not frappe.has_permission("CRM Deal", "read", deal):
+		frappe.throw(_("Not allowed to read Deal"), frappe.PermissionError)
+	if not frappe.has_permission("CRM Deal", "create"):
+		frappe.throw(_("Not allowed to create Deal"), frappe.PermissionError)
+
+	source = frappe.get_doc("CRM Deal", deal)
+	repeat_order = frappe.copy_doc(source)
+
+	# Reset fields tied to the source deal's own lifecycle so the repeat order gets its own.
+	# expected_closure_date is set to today rather than cleared: if FCRM Settings has
+	# "Enable Forecasting" on, validate_forecasting_fields() requires it to be non-empty.
+	repeat_order.status = "Repeat Order"
+	repeat_order.probability = None
+	repeat_order.closed_date = None
+	repeat_order.expected_closure_date = frappe.utils.nowdate()
+	repeat_order.lost_reason = None
+	repeat_order.lost_notes = None
+	repeat_order.status_change_log = []
+
+	# copy_doc carries over every field that isn't marked no_copy, which includes the source
+	# deal's SLA/response tracking. A fresh repeat order must not inherit those metrics; clearing
+	# `sla` lets before_validate -> set_sla()/apply_sla() assign and compute a fresh SLA.
+	# This mirrors the restricted-field handling in CRM Lead's convert_to_deal.
+	for fieldname in (
+		"sla",
+		"sla_status",
+		"sla_creation",
+		"response_by",
+		"first_response_time",
+		"first_responded_on",
+		"last_response_time",
+		"last_responded_on",
+		"communication_status",
+	):
+		repeat_order.set(fieldname, None)
+	repeat_order.rolling_responses = []
+
+	repeat_order.insert(ignore_permissions=True)
+	return repeat_order.name
