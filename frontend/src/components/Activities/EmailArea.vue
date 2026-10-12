@@ -94,6 +94,7 @@ function reply(email, reply_all = false) {
   let message = email.content
   let recipients = email.recipients.split(',').map((r) => r.trim())
   editor.fromEmail = email.sender
+  editor.inReplyTo = email.name
   editor.toEmails = [email.sender]
   editor.cc = editor.bcc = false
   editor.ccEmails = []
