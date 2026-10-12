@@ -160,6 +160,13 @@
                 @click="togglePopover()"
               />
             </IconPicker>
+            <AiDraftButton
+              :reference-doctype="doctype"
+              :reference-name="modelValue.name"
+              :recipients="toEmails.join(', ')"
+              :in-reply-to="inReplyTo"
+              @generated="onAiDraft"
+            />
           </div>
           <div class="mt-2 flex items-center justify-end space-x-2 sm:mt-0">
             <Button v-bind="discardButtonProps || {}" :label="__('Discard')" />
@@ -188,6 +195,8 @@ import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
 import AttachmentItem from '@/components/AttachmentItem.vue'
 import EmailMultiSelect from '@/components/Controls/EmailMultiSelect.vue'
 import EmailTemplateSelectorModal from '@/components/Modals/EmailTemplateSelectorModal.vue'
+import AiDraftButton from '@/components/AiDraftButton.vue'
+import { applyAiDraft } from '@/utils/aiDraft'
 import {
   buildEditorExtensions,
   fullToolbar,
@@ -257,6 +266,11 @@ const ccEmails = ref([])
 const bccEmails = ref([])
 const ccInput = ref(null)
 const bccInput = ref(null)
+// The email being replied to (set by EmailArea.vue), so an AI draft sees that thread.
+const inReplyTo = ref(null)
+watch(content, (value) => !value && (inReplyTo.value = null))
+const onAiDraft = (result) =>
+  applyAiDraft(result, { content, subject, defaultSubject: props.subject })
 
 const extensions = buildEditorExtensions({
   starterKit: { paragraph: false },
@@ -341,5 +355,6 @@ defineExpose({
   toEmails,
   ccEmails,
   bccEmails,
+  inReplyTo,
 })
 </script>
